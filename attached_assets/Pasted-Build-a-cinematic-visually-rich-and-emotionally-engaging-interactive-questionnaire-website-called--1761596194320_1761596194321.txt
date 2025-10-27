@@ -1,0 +1,126 @@
+Build a cinematic, visually rich, and emotionally engaging interactive questionnaire website called “Combined College Student Stress Scale (CCSSS)”.
+
+The site must feel alive — immersive animations, glowing gradients, and fluid transitions that make the user feel they’re part of an intelligent, calm, and futuristic self-assessment journey.
+
+🎨 Visual Atmosphere
+
+Overall mood: a mix of calm psychology and sleek sci-fi minimalism.
+
+Use deep gradients with glow effects — think indigo fading into turquoise, or cosmic violet blending into coral orange.
+
+Add depth and motion: parallax layers, floating particles, subtle lens-flare streaks on hover.
+
+Fonts: “Poppins SemiBold” for headings, “Inter Regular” for text. Big, airy spacing.
+
+Cards and buttons use glassmorphism — translucent backgrounds with blur and inner glow.
+
+Make every interaction tactile: soft button pulses, hover shimmer, slide-up question reveals.
+
+🧭 Flow & Interaction
+
+1. Hero / Landing Section
+
+Full-screen gradient motion background with slow waves or particle drift.
+
+Central headline: “Combined College Student Stress Scale (CCSSS)”
+
+Subtext fades in: “Discover your stress and resilience through a guided experience.”
+
+A large glowing “Start Assessment” button that expands slightly on hover.
+
+Clicking it smoothly scrolls (or fades) to the questionnaire.
+
+2. Core Questionnaire (10 Questions)
+
+Each question appears inside a floating glass card with animated entrance.
+
+Below each question, five circular rating buttons (0-4) glow when hovered or selected.
+
+Progress bar or ring fills with color as user advances.
+
+Background shifts hue subtly every few questions to keep visual rhythm.
+
+When user finishes core 10:
+
+If total ≤ 13 → transition to Results Scene (gentle fade-out, reveal animated score).
+
+If total > 13 → trigger “Unlock Optional Modules” animation (like cards flipping open).
+
+3. Conditional Modules (Adaptive Flow)
+
+The site intelligently chooses which modules to display based on responses:
+
+Heavy workload ≥ 2 and Pressure to maintain grades ≥ 2 → Academic Module
+
+Poor sleep ≥ 2 → Health & Lifestyle Module
+
+Financial difficulties ≥ 2 → Financial & Practical Module
+
+Every user → Social / Relationships Module
+
+Each module starts with a short animated title (“Module B — Social Connections”) then five questions appear one by one with motion blur fade-ins.
+
+Use different background color themes per module (Academic = violet/blue; Social = rose/pink; Financial = amber/gold; Health = green/teal).
+
+Display a floating label like “Module 2 of 4” at the top.
+
+4. Result Generation
+
+After modules end, calculate: Total = Core + Modules
+
+Animate transition into a Result Dashboard Scene:
+
+A circular gauge that fills from 0 → score with easing animation.
+
+Gauge color morphs from green → yellow → red based on stress level.
+
+Beside it, small animated bars for Academic / Social / Financial / Health stress.
+
+Dynamic message (typewriter animation):
+
+“Your stress level is Moderate. Academic and lifestyle pressures are most prominent.”
+
+Subtle confetti or particle burst when results appear.
+
+Buttons: glowing “Download PDF Report” and “Retake Assessment.”
+
+5. Ending Scene
+
+Soft ambient background animation continues.
+
+Footer fades in:
+
+“Developed by Group 10 — Workplace Stress Resilience Prediction Project, Techno Main Salt Lake.”
+
+🧠 Logic & Data Rules (Preserve Functionality)
+
+Core 10 questions → 0–4 ratings → if score > 13 → show optional modules.
+
+Optional modules displayed conditionally as above.
+
+Total Score = Core (0–40) + Selected Modules (0–80).
+
+Classification thresholds: 0–33 % = Low, 34–66 % = Moderate, 67–100 % = High.
+
+Each transition animated; nothing jumps abruptly.
+
+Store answers in local state (no backend needed).
+
+Optional JSON/CSV export on completion.
+
+🪄 Experience Goals
+
+Never static — every movement feels intentional.
+
+No white page feel — keep depth, contrast, light bloom.
+
+Emotionally balanced — calm sound or silent by default but visually expressive.
+
+Should feel like an interactive wellness app, not a Google Form.
+
+🚀 Deliverable
+
+A one-page immersive website that flows like this:
+Hero → Core Questions → Adaptive Modules → Animated Results → Credits.
+
+The result must be visually bold, smooth, and expressive — closer to a digital art experience than a static survey, while keeping all scientific logic intact.
