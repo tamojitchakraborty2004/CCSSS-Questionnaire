@@ -8,10 +8,11 @@ import { ResultsDashboard } from '@/components/ResultsDashboard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { CORE_QUESTIONS, MODULES, type AssessmentResult, type Response } from '@shared/schema';
 
-type Stage = 'hero' | 'core' | 'module-intro' | 'module' | 'results';
+type Stage = 'hero' | 'onboarding' | 'core' | 'module-intro' | 'module' | 'results';
 
 export default function AssessmentPage() {
   const [stage, setStage] = useState<Stage>('hero');
+  const [userInfo, setUserInfo] = useState({ name: '', email: '', age: '' });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [coreResponses, setCoreResponses] = useState<Response[]>([]);
   const [moduleResponses, setModuleResponses] = useState<Response[]>([]);
@@ -19,10 +20,17 @@ export default function AssessmentPage() {
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
   const [currentModuleQuestionIndex, setCurrentModuleQuestionIndex] = useState(0);
   const [result, setResult] = useState<AssessmentResult | null>(null);
-  const [backgroundGradient, setBackgroundGradient] = useState('from-indigo-900 via-purple-900 to-pink-900');
+  const [backgroundGradient, setBackgroundGradient] = useState('from-indigo-950 via-purple-950 to-slate-950');
 
   const handleStart = () => {
-    setStage('core');
+    setStage('onboarding');
+  };
+
+  const handleOnboardingSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userInfo.name && userInfo.email && userInfo.age) {
+      setStage('core');
+    }
   };
 
   const handleCoreResponse = (rating: number) => {
@@ -168,6 +176,7 @@ export default function AssessmentPage() {
     setCurrentModuleIndex(0);
     setCurrentModuleQuestionIndex(0);
     setResult(null);
+    setUserInfo({ name: '', email: '', age: '' });
   };
 
   const handleDownloadPDF = () => {
@@ -182,6 +191,7 @@ export default function AssessmentPage() {
     if (!result) return;
 
     const csvData = [
+      ['User Info', userInfo.name, userInfo.email, userInfo.age],
       ['Question ID', 'Question', 'Rating'],
       ...CORE_QUESTIONS.map(q => {
         const response = coreResponses.find(r => r.questionId === q.id);
@@ -208,31 +218,31 @@ export default function AssessmentPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `stress-assessment-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `stress-assessment-${userInfo.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   // Update background gradient based on stage
   useEffect(() => {
-    if (stage === 'hero') {
-      setBackgroundGradient('from-indigo-900 via-purple-900 to-pink-900');
+    if (stage === 'hero' || stage === 'onboarding') {
+      setBackgroundGradient('from-indigo-950 via-purple-950 to-slate-950');
     } else if (stage === 'core') {
-      const hue = (currentQuestionIndex / CORE_QUESTIONS.length) * 60 + 240;
-      setBackgroundGradient(`from-[hsl(${hue},70%,25%)] via-[hsl(${hue + 20},60%,30%)] to-[hsl(${hue + 40},65%,25%)]`);
+      const hue = (currentQuestionIndex / CORE_QUESTIONS.length) * 30 + 260; // Deeper, more aesthetic range
+      setBackgroundGradient(`from-[hsl(${hue},40%,12%)] via-[hsl(${hue + 15},35%,15%)] to-[hsl(${hue + 30},40%,12%)]`);
     } else if (stage === 'module-intro' || stage === 'module') {
       const module = activeModules[currentModuleIndex];
       if (module.id === 'academic') {
-        setBackgroundGradient('from-violet-900 via-purple-900 to-blue-900');
+        setBackgroundGradient('from-violet-950 via-indigo-950 to-blue-950');
       } else if (module.id === 'social') {
-        setBackgroundGradient('from-rose-900 via-pink-900 to-fuchsia-900');
+        setBackgroundGradient('from-rose-950 via-pink-950 to-purple-950');
       } else if (module.id === 'financial') {
-        setBackgroundGradient('from-amber-900 via-orange-900 to-yellow-900');
+        setBackgroundGradient('from-amber-950 via-orange-950 to-yellow-950');
       } else if (module.id === 'health') {
-        setBackgroundGradient('from-emerald-900 via-teal-900 to-cyan-900');
+        setBackgroundGradient('from-emerald-950 via-teal-950 to-cyan-950');
       }
     } else if (stage === 'results') {
-      setBackgroundGradient('from-slate-900 via-purple-900 to-slate-900');
+      setBackgroundGradient('from-slate-950 via-purple-950 to-slate-950');
     }
   }, [stage, currentQuestionIndex, currentModuleIndex, activeModules]);
 
@@ -296,6 +306,66 @@ export default function AssessmentPage() {
         {stage === 'hero' && (
           <motion.div key="hero" exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.5 }}>
             <Hero onStart={handleStart} />
+          </motion.div>
+        )}
+
+        {stage === 'onboarding' && (
+          <motion.div 
+            key="onboarding" 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="min-h-screen flex items-center justify-center px-4 py-24 relative z-10"
+          >
+            <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl">
+              <h2 className="text-3xl sm:text-4xl font-heading font-bold text-white mb-2 text-center">Welcome</h2>
+              <p className="text-white/60 text-center mb-8">Please tell us a bit about yourself before we begin.</p>
+              <form onSubmit={handleOnboardingSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Full Name</label>
+                  <input
+                    required
+                    type="text"
+                    value={userInfo.name}
+                    onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    placeholder="Enter your name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Email Address</label>
+                  <input
+                    required
+                    type="email"
+                    value={userInfo.email}
+                    onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    placeholder="your@email.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Age</label>
+                  <input
+                    required
+                    type="number"
+                    min="15"
+                    max="100"
+                    value={userInfo.age}
+                    onChange={(e) => setUserInfo({ ...userInfo, age: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    placeholder="e.g. 20"
+                  />
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  className="w-full py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-heading font-bold rounded-2xl shadow-xl hover:shadow-indigo-500/25 transition-all mt-4"
+                >
+                  Continue to Assessment
+                </motion.button>
+              </form>
+            </div>
           </motion.div>
         )}
 
