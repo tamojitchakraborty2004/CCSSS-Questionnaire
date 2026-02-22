@@ -8,6 +8,8 @@ import { ResultsDashboard } from '@/components/ResultsDashboard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { CORE_QUESTIONS, MODULES, type AssessmentResult, type Response } from '@shared/schema';
 
+import { apiRequest } from '@/lib/queryClient';
+
 type Stage = 'hero' | 'onboarding' | 'core' | 'module-intro' | 'module' | 'results';
 
 export default function AssessmentPage() {
@@ -125,7 +127,7 @@ export default function AssessmentPage() {
     }
   };
 
-  const calculateResults = (finalModuleResponses: Response[]) => {
+  const calculateResults = async (finalModuleResponses: Response[]) => {
     const coreScore = coreResponses.reduce((sum, r) => sum + r.rating, 0);
     
     const moduleScores: Record<string, number> = {};
@@ -139,14 +141,13 @@ export default function AssessmentPage() {
     const totalModuleScore = Object.values(moduleScores).reduce((sum, score) => sum + score, 0);
     const totalScore = coreScore + totalModuleScore;
     const maxScore = 40 + (activeModules.length * 20);
-    const percentage = (totalScore / maxScore) * 100;
+    const percentage = Math.round((totalScore / maxScore) * 100);
 
     let stressLevel: 'Low' | 'Moderate' | 'High';
     if (percentage <= 33) stressLevel = 'Low';
     else if (percentage <= 66) stressLevel = 'Moderate';
     else stressLevel = 'High';
 
-    // Determine dominant categories (highest scoring modules)
     const sortedModules = Object.entries(moduleScores)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 2)
@@ -162,6 +163,26 @@ export default function AssessmentPage() {
       dominantCategories: sortedModules,
       completedAt: new Date().toISOString(),
     };
+
+    // Save to database
+    try {
+      await apiRequest('POST', '/api/assessments', {
+        name: userInfo.name,
+        email: userInfo.email,
+        age: parseInt(userInfo.age),
+        coreScore,
+        moduleScores,
+        totalScore,
+        maxScore,
+        percentage,
+        stressLevel,
+        dominantCategories: sortedModules,
+        coreResponses,
+        moduleResponses: finalModuleResponses,
+      });
+    } catch (error) {
+      console.error('Failed to save assessment:', error);
+    }
 
     setResult(assessmentResult);
     setStage('results');
@@ -226,10 +247,10 @@ export default function AssessmentPage() {
   // Update background gradient based on stage
   useEffect(() => {
     if (stage === 'hero' || stage === 'onboarding') {
-      setBackgroundGradient('from-indigo-950 via-purple-950 to-slate-950');
+      setBackgroundGradient('from-slate-950 via-indigo-950 to-slate-950');
     } else if (stage === 'core') {
-      const hue = (currentQuestionIndex / CORE_QUESTIONS.length) * 30 + 260; // Deeper, more aesthetic range
-      setBackgroundGradient(`from-[hsl(${hue},40%,12%)] via-[hsl(${hue + 15},35%,15%)] to-[hsl(${hue + 30},40%,12%)]`);
+      const hue = 260 + (currentQuestionIndex / CORE_QUESTIONS.length) * 20;
+      setBackgroundGradient(`from-[hsl(${hue},45%,8%)] via-[hsl(${hue + 10},40%,12%)] to-[hsl(${hue + 20},45%,8%)]`);
     } else if (stage === 'module-intro' || stage === 'module') {
       const module = activeModules[currentModuleIndex];
       if (module.id === 'academic') {

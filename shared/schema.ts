@@ -1,26 +1,51 @@
+import { pgTable, text, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Core Question Schema
+export const assessments = pgTable("assessments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  age: integer("age").notNull(),
+  coreScore: integer("core_score").notNull(),
+  moduleScores: jsonb("module_scores").notNull(),
+  totalScore: integer("total_score").notNull(),
+  maxScore: integer("max_score").notNull(),
+  percentage: integer("percentage").notNull(),
+  stressLevel: text("stress_level").notNull(),
+  dominantCategories: jsonb("dominant_categories").notNull(),
+  coreResponses: jsonb("core_responses").notNull(),
+  moduleResponses: jsonb("module_responses").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAssessmentSchema = createInsertSchema(assessments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAssessment = z.infer<typeof insertAssessmentSchema>;
+export type Assessment = typeof assessments.$inferSelect;
+
+// --- Existing Types (kept for frontend compatibility) ---
+
 export const coreQuestionSchema = z.object({
   id: z.string(),
   text: z.string(),
   category: z.string(),
 });
 
-// Module Question Schema
 export const moduleQuestionSchema = z.object({
   id: z.string(),
   text: z.string(),
   moduleId: z.string(),
 });
 
-// Response Schema (0-4 rating)
 export const responseSchema = z.object({
   questionId: z.string(),
   rating: z.number().min(0).max(4),
 });
 
-// Assessment Result Schema
 export const assessmentResultSchema = z.object({
   coreScore: z.number(),
   moduleScores: z.record(z.string(), z.number()),
@@ -32,7 +57,6 @@ export const assessmentResultSchema = z.object({
   completedAt: z.string(),
 });
 
-// Module Definition
 export const moduleSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -43,14 +67,12 @@ export const moduleSchema = z.object({
   questions: z.array(moduleQuestionSchema),
 });
 
-// Types
 export type CoreQuestion = z.infer<typeof coreQuestionSchema>;
 export type ModuleQuestion = z.infer<typeof moduleQuestionSchema>;
 export type Response = z.infer<typeof responseSchema>;
 export type AssessmentResult = z.infer<typeof assessmentResultSchema>;
 export type Module = z.infer<typeof moduleSchema>;
 
-// Core Questions Data
 export const CORE_QUESTIONS: CoreQuestion[] = [
   { id: "c1", text: "How often do you feel overwhelmed by academic workload?", category: "academic" },
   { id: "c2", text: "How much pressure do you feel to maintain good grades?", category: "academic" },
@@ -64,7 +86,6 @@ export const CORE_QUESTIONS: CoreQuestion[] = [
   { id: "c10", text: "How frequently do you worry about career prospects?", category: "general" },
 ];
 
-// Module Questions Data
 export const MODULES: Module[] = [
   {
     id: "academic",
