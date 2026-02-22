@@ -1,4 +1,4 @@
-import { assessments, type Assessment, type InsertAssessment } from "../shared/schema";
+import { assessments, type Assessment, type InsertAssessment } from "@shared/schema";
 import { db } from "./db";
 
 export interface IStorage {
