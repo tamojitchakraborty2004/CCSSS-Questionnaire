@@ -249,8 +249,8 @@ export default function AssessmentPage() {
     if (stage === 'hero' || stage === 'onboarding') {
       setBackgroundGradient('from-slate-950 via-indigo-950 to-slate-950');
     } else if (stage === 'core') {
-      const hue = 260 + (currentQuestionIndex / CORE_QUESTIONS.length) * 20;
-      setBackgroundGradient(`from-[hsl(${hue},45%,8%)] via-[hsl(${hue + 10},40%,12%)] to-[hsl(${hue + 20},45%,8%)]`);
+      const hue = 260 + (currentQuestionIndex / CORE_QUESTIONS.length) * 40;
+      setBackgroundGradient(`from-[hsl(${hue},50%,5%)] via-[hsl(${hue+10},45%,8%)] to-[hsl(${hue+20},50%,5%)]`);
     } else if (stage === 'module-intro' || stage === 'module') {
       const module = activeModules[currentModuleIndex];
       if (module.id === 'academic') {
