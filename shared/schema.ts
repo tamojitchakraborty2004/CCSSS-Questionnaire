@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const assessments = pgTable("assessments", {
   id: serial("id").primaryKey(),
+  studentId: text("student_id").notNull(),
   name: text("name").notNull(),
   email: text("email").notNull(),
   age: integer("age").notNull(),

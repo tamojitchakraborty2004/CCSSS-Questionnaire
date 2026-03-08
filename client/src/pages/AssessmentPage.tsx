@@ -10,11 +10,14 @@ import { CORE_QUESTIONS, MODULES, type AssessmentResult, type Response } from '@
 
 import { apiRequest } from '@/lib/queryClient';
 
-type Stage = 'hero' | 'onboarding' | 'core' | 'module-intro' | 'module' | 'results';
+type Stage = 'hero' | 'onboarding' | 'core' | 'module-intro' | 'module' | 'results' | 'duplicate';
 
 export default function AssessmentPage() {
   const [stage, setStage] = useState<Stage>('hero');
-  const [userInfo, setUserInfo] = useState({ name: '', email: '', age: '' });
+  const [duplicateReason, setDuplicateReason] = useState('');
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [onboardingError, setOnboardingError] = useState('');
+  const [userInfo, setUserInfo] = useState({ name: '', email: '', age: '', studentId: '' });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [coreResponses, setCoreResponses] = useState<Response[]>([]);
   const [moduleResponses, setModuleResponses] = useState<Response[]>([]);
@@ -28,11 +31,32 @@ export default function AssessmentPage() {
     setStage('onboarding');
   };
 
-  const handleOnboardingSubmit = (e: React.FormEvent) => {
+  const handleOnboardingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (userInfo.name && userInfo.email && userInfo.age) {
-      setStage('core');
+    if (!userInfo.name || !userInfo.email || !userInfo.age || !userInfo.studentId) return;
+
+    setCheckingDuplicate(true);
+    setOnboardingError('');
+
+    try {
+      const res = await fetch('/api/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userInfo.email, studentId: userInfo.studentId }),
+      });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        setOnboardingError(`This ${data.reason} has already been used to submit an assessment. Only one submission is allowed per student.`);
+        setCheckingDuplicate(false);
+        return;
+      }
+    } catch {
+      // If check fails, allow them through (server will catch on final submit)
     }
+
+    setCheckingDuplicate(false);
+    setStage('core');
   };
 
   const handleCoreResponse = (rating: number) => {
@@ -53,32 +77,23 @@ export default function AssessmentPage() {
     if (currentQuestionIndex < CORE_QUESTIONS.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
-      // Core questions complete - determine which modules to show
       const coreScore = coreResponses.reduce((sum, r) => sum + r.rating, 0);
       const modules: typeof MODULES = [];
 
-      // Check conditions for each module
       const heavyWorkload = coreResponses.find(r => r.questionId === 'c1')?.rating || 0;
       const pressureGrades = coreResponses.find(r => r.questionId === 'c2')?.rating || 0;
       const poorSleep = coreResponses.find(r => r.questionId === 'c3')?.rating || 0;
       const financial = coreResponses.find(r => r.questionId === 'c4')?.rating || 0;
 
-      // Academic module: Heavy workload ≥ 2 AND Pressure to maintain grades ≥ 2
       if (heavyWorkload >= 2 && pressureGrades >= 2) {
         modules.push(MODULES.find(m => m.id === 'academic')!);
       }
-
-      // Health module: Poor sleep ≥ 2
       if (poorSleep >= 2) {
         modules.push(MODULES.find(m => m.id === 'health')!);
       }
-
-      // Financial module: Financial difficulties ≥ 2
       if (financial >= 2) {
         modules.push(MODULES.find(m => m.id === 'financial')!);
       }
-
-      // Social module: Everyone gets this
       modules.push(MODULES.find(m => m.id === 'social')!);
 
       setActiveModules(modules);
@@ -88,7 +103,6 @@ export default function AssessmentPage() {
         setCurrentModuleQuestionIndex(0);
         setStage('module-intro');
       } else {
-        // Skip modules and go straight to results
         calculateResults([]);
       }
     }
@@ -115,13 +129,11 @@ export default function AssessmentPage() {
     if (currentModuleQuestionIndex < module.questions.length - 1) {
       setCurrentModuleQuestionIndex(currentModuleQuestionIndex + 1);
     } else {
-      // Module complete
       if (currentModuleIndex < activeModules.length - 1) {
         setCurrentModuleIndex(currentModuleIndex + 1);
         setCurrentModuleQuestionIndex(0);
         setStage('module-intro');
       } else {
-        // All modules complete
         calculateResults(moduleResponses);
       }
     }
@@ -164,22 +176,33 @@ export default function AssessmentPage() {
       completedAt: new Date().toISOString(),
     };
 
-    // Save to database
     try {
-      await apiRequest('POST', '/api/assessments', {
-        name: userInfo.name,
-        email: userInfo.email,
-        age: parseInt(userInfo.age),
-        coreScore,
-        moduleScores,
-        totalScore,
-        maxScore,
-        percentage,
-        stressLevel,
-        dominantCategories: sortedModules,
-        coreResponses,
-        moduleResponses: finalModuleResponses,
+      const res = await fetch('/api/assessments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: userInfo.studentId,
+          name: userInfo.name,
+          email: userInfo.email,
+          age: parseInt(userInfo.age),
+          coreScore,
+          moduleScores,
+          totalScore,
+          maxScore,
+          percentage,
+          stressLevel,
+          dominantCategories: sortedModules,
+          coreResponses,
+          moduleResponses: finalModuleResponses,
+        }),
       });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        setDuplicateReason(data.reason || 'email address or student ID');
+        setStage('duplicate');
+        return;
+      }
     } catch (error) {
       console.error('Failed to save assessment:', error);
     }
@@ -190,6 +213,8 @@ export default function AssessmentPage() {
 
   const handleRetake = () => {
     setStage('hero');
+    setDuplicateReason('');
+    setOnboardingError('');
     setCurrentQuestionIndex(0);
     setCoreResponses([]);
     setModuleResponses([]);
@@ -197,12 +222,11 @@ export default function AssessmentPage() {
     setCurrentModuleIndex(0);
     setCurrentModuleQuestionIndex(0);
     setResult(null);
-    setUserInfo({ name: '', email: '', age: '' });
+    setUserInfo({ name: '', email: '', age: '', studentId: '' });
   };
 
   const handleDownloadPDF = () => {
     if (!result) return;
-    
     import('@/lib/pdfGenerator').then(({ generatePDFReport }) => {
       generatePDFReport(result, coreResponses, moduleResponses);
     });
@@ -212,7 +236,11 @@ export default function AssessmentPage() {
     if (!result) return;
 
     const csvData = [
-      ['User Info', userInfo.name, userInfo.email, userInfo.age],
+      ['Student ID', userInfo.studentId],
+      ['Name', userInfo.name],
+      ['Email', userInfo.email],
+      ['Age', userInfo.age],
+      [],
       ['Question ID', 'Question', 'Rating'],
       ...CORE_QUESTIONS.map(q => {
         const response = coreResponses.find(r => r.questionId === q.id);
@@ -230,7 +258,7 @@ export default function AssessmentPage() {
       ...Object.entries(result.moduleScores).map(([name, score]) => [name, score.toString()]),
       ['Total Score', result.totalScore.toString()],
       ['Max Score', result.maxScore.toString()],
-      ['Percentage', `${result.percentage.toFixed(1)}%`],
+      ['Percentage', `${result.percentage}%`],
       ['Stress Level', result.stressLevel],
     ];
 
@@ -239,31 +267,35 @@ export default function AssessmentPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `stress-assessment-${userInfo.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `stress-assessment-${userInfo.studentId}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Update background gradient based on stage
   useEffect(() => {
     if (stage === 'hero' || stage === 'onboarding') {
       setBackgroundGradient('from-slate-950 via-indigo-950 to-slate-950');
     } else if (stage === 'core') {
-      // Significantly darker, more atmospheric background for the first 10 questions
-      const hue = 250 + (currentQuestionIndex / CORE_QUESTIONS.length) * 40;
-      setBackgroundGradient(`from-[hsl(${hue},60%,1%)] via-[hsl(${hue+10},50%,3%)] to-[hsl(${hue+20},60%,1%)]`);
+      const coreGradients = [
+        'from-indigo-950 via-slate-950 to-purple-950',
+        'from-indigo-950 via-slate-950 to-purple-950',
+        'from-slate-950 via-indigo-950 to-violet-950',
+        'from-slate-950 via-indigo-950 to-violet-950',
+        'from-violet-950 via-slate-950 to-indigo-950',
+        'from-violet-950 via-slate-950 to-indigo-950',
+        'from-purple-950 via-indigo-950 to-slate-950',
+        'from-purple-950 via-indigo-950 to-slate-950',
+        'from-indigo-950 via-purple-950 to-slate-950',
+        'from-indigo-950 via-purple-950 to-slate-950',
+      ];
+      setBackgroundGradient(coreGradients[currentQuestionIndex] || 'from-indigo-950 via-slate-950 to-purple-950');
     } else if (stage === 'module-intro' || stage === 'module') {
       const module = activeModules[currentModuleIndex];
-      if (module.id === 'academic') {
-        setBackgroundGradient('from-violet-950 via-indigo-950 to-blue-950');
-      } else if (module.id === 'social') {
-        setBackgroundGradient('from-rose-950 via-pink-950 to-purple-950');
-      } else if (module.id === 'financial') {
-        setBackgroundGradient('from-amber-950 via-orange-950 to-yellow-950');
-      } else if (module.id === 'health') {
-        setBackgroundGradient('from-emerald-950 via-teal-950 to-cyan-950');
-      }
-    } else if (stage === 'results') {
+      if (module.id === 'academic') setBackgroundGradient('from-violet-950 via-indigo-950 to-blue-950');
+      else if (module.id === 'social') setBackgroundGradient('from-rose-950 via-pink-950 to-purple-950');
+      else if (module.id === 'financial') setBackgroundGradient('from-amber-950 via-orange-950 to-yellow-950');
+      else if (module.id === 'health') setBackgroundGradient('from-emerald-950 via-teal-950 to-cyan-950');
+    } else if (stage === 'results' || stage === 'duplicate') {
       setBackgroundGradient('from-slate-950 via-purple-950 to-slate-950');
     }
   }, [stage, currentQuestionIndex, currentModuleIndex, activeModules]);
@@ -288,11 +320,9 @@ export default function AssessmentPage() {
     let completed = coreResponses.length;
     if (stage === 'module' || stage === 'module-intro' || stage === 'results') {
       completed = coreTotal;
-      
       for (let i = 0; i < currentModuleIndex; i++) {
         completed += activeModules[i].questions.length;
       }
-      
       if (stage === 'module') {
         completed += moduleResponses.filter(r =>
           activeModules[currentModuleIndex].questions.some(q => q.id === r.questionId)
@@ -305,25 +335,23 @@ export default function AssessmentPage() {
 
   const progress = getTotalProgress();
 
+  const inputClass = "w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all";
+
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Animated Background Gradient */}
       <motion.div
         animate={{ opacity: 1 }}
         className={`fixed inset-0 bg-gradient-to-br ${backgroundGradient} transition-all duration-1000`}
       />
 
-      {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Progress Bar (except hero and results) */}
       {(stage === 'core' || stage === 'module' || stage === 'module-intro') && (
         <div className="fixed top-0 left-0 right-0 z-50 p-4">
           <ProgressBar current={progress.completed} total={progress.total} />
         </div>
       )}
 
-      {/* Main Content */}
       <AnimatePresence mode="wait">
         {stage === 'hero' && (
           <motion.div key="hero" exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.5 }}>
@@ -332,8 +360,8 @@ export default function AssessmentPage() {
         )}
 
         {stage === 'onboarding' && (
-          <motion.div 
-            key="onboarding" 
+          <motion.div
+            key="onboarding"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -341,30 +369,48 @@ export default function AssessmentPage() {
           >
             <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl">
               <h2 className="text-3xl sm:text-4xl font-heading font-bold text-white mb-2 text-center">Welcome</h2>
-              <p className="text-white/60 text-center mb-8">Please tell us a bit about yourself before we begin.</p>
-              <form onSubmit={handleOnboardingSubmit} className="space-y-6">
+              <p className="text-white/60 text-center mb-8">Tell us about yourself before we begin.</p>
+              <form onSubmit={handleOnboardingSubmit} className="space-y-5">
+
+                <div>
+                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">
+                    Roll Number
+                    <span className="ml-2 text-indigo-400 text-xs">(required for research)</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={userInfo.studentId}
+                    onChange={e => setUserInfo({ ...userInfo, studentId: e.target.value })}
+                    className={inputClass}
+                    placeholder="e.g. 13000122037"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Full Name</label>
                   <input
                     required
                     type="text"
                     value={userInfo.name}
-                    onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    onChange={e => setUserInfo({ ...userInfo, name: e.target.value })}
+                    className={inputClass}
                     placeholder="Enter your name"
                   />
                 </div>
+
                 <div>
                   <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Email Address</label>
                   <input
                     required
                     type="email"
                     value={userInfo.email}
-                    onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    onChange={e => setUserInfo({ ...userInfo, email: e.target.value })}
+                    className={inputClass}
                     placeholder="your@email.com"
                   />
                 </div>
+
                 <div>
                   <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Age</label>
                   <input
@@ -373,18 +419,37 @@ export default function AssessmentPage() {
                     min="15"
                     max="100"
                     value={userInfo.age}
-                    onChange={(e) => setUserInfo({ ...userInfo, age: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                    onChange={e => setUserInfo({ ...userInfo, age: e.target.value })}
+                    className={inputClass}
                     placeholder="e.g. 20"
                   />
                 </div>
+
+                <p className="text-white/30 text-xs text-center pt-1">
+                  Your data will only be used for academic research purposes.
+                </p>
+
+                {onboardingError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start gap-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl px-5 py-4"
+                  >
+                    <svg className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                    </svg>
+                    <p className="text-rose-300 text-sm leading-relaxed">{onboardingError}</p>
+                  </motion.div>
+                )}
+
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: checkingDuplicate ? 1 : 1.02 }}
+                  whileTap={{ scale: checkingDuplicate ? 1 : 0.98 }}
                   type="submit"
-                  className="w-full py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-heading font-bold rounded-2xl shadow-xl hover:shadow-indigo-500/25 transition-all mt-4"
+                  disabled={checkingDuplicate}
+                  className="w-full py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-heading font-bold rounded-2xl shadow-xl hover:shadow-indigo-500/25 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  Continue to Assessment
+                  {checkingDuplicate ? 'Checking...' : 'Continue to Assessment →'}
                 </motion.button>
               </form>
             </div>
@@ -407,25 +472,30 @@ export default function AssessmentPage() {
         )}
 
         {stage === 'module-intro' && (
-          <motion.div key={`module-intro-${currentModuleIndex}`}>
+          <motion.div
+            key={`module-intro-${currentModuleIndex}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="min-h-screen flex flex-col items-center justify-center px-4 relative z-10"
+          >
             <ModuleHeader
               moduleName={activeModules[currentModuleIndex].name}
               moduleNumber={currentModuleIndex + 1}
               totalModules={activeModules.length}
               gradient={activeModules[currentModuleIndex].theme.gradient}
             />
-            <div className="flex justify-center pb-20">
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                onClick={() => setStage('module')}
-                data-testid="button-start-module"
-                className="px-10 py-4 bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md text-white font-heading font-semibold text-lg rounded-full border border-white/30 hover:bg-white/30 transition-all duration-300 shadow-lg"
-              >
-                Begin Module
-              </motion.button>
-            </div>
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              onClick={() => setStage('module')}
+              data-testid="button-start-module"
+              className="mt-8 px-12 py-4 bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md text-white font-heading font-semibold text-lg rounded-full border border-white/30 hover:bg-white/30 transition-all duration-300 shadow-lg"
+            >
+              Begin Module
+            </motion.button>
           </motion.div>
         )}
 
@@ -460,8 +530,6 @@ export default function AssessmentPage() {
               onDownloadPDF={handleDownloadPDF}
               onExportData={handleExportData}
             />
-            
-            {/* Credits Footer */}
             <motion.footer
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -475,6 +543,32 @@ export default function AssessmentPage() {
             </motion.footer>
           </motion.div>
         )}
+
+        {stage === 'duplicate' && (
+          <motion.div
+            key="duplicate"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="min-h-screen flex items-center justify-center px-4 relative z-10"
+          >
+            <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-xl rounded-3xl p-10 border border-white/10 shadow-2xl text-center">
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white font-heading mb-3">Already Submitted</h2>
+              <p className="text-white/60 leading-relaxed">
+                An assessment has already been submitted using this <span className="text-rose-400 font-semibold">{duplicateReason}</span>.
+                Only one submission is allowed per student.
+              </p>
+              <p className="text-white/40 text-sm mt-4">
+                If you believe this is an error, please contact your research coordinator.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
       </AnimatePresence>
     </div>
   );
