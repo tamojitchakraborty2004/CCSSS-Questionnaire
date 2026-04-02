@@ -8,6 +8,10 @@ export const assessments = pgTable("assessments", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   age: integer("age").notNull(),
+  gender: text("gender").notNull(),
+  semester: text("semester").notNull(),
+  scholarType: text("scholar_type").notNull(),
+  qualification: text("qualification").notNull().default(''),
   coreScore: integer("core_score").notNull(),
   moduleScores: jsonb("module_scores").notNull(),
   totalScore: integer("total_score").notNull(),
@@ -17,6 +21,8 @@ export const assessments = pgTable("assessments", {
   dominantCategories: jsonb("dominant_categories").notNull(),
   coreResponses: jsonb("core_responses").notNull(),
   moduleResponses: jsonb("module_responses").notNull(),
+  pdfData: text("pdf_data"),
+  interpretation: text("interpretation"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

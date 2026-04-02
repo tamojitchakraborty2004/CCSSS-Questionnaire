@@ -6,14 +6,12 @@ interface RatingButtonsProps {
   disabled?: boolean;
 }
 
-const LABELS = ['Not at all', 'Rarely', 'Sometimes', 'Often', 'Very Often'];
-
 export function RatingButtons({ value, onChange, disabled }: RatingButtonsProps) {
   return (
     <div className="w-full max-w-xl mx-auto">
       <div className="grid grid-cols-5 gap-3 sm:gap-5">
         {[0, 1, 2, 3, 4].map((rating) => (
-          <div key={rating} className="flex flex-col items-center gap-3">
+          <div key={rating} className="flex flex-col items-center">
             <motion.button
               type="button"
               onClick={() => !disabled && onChange(rating)}
@@ -42,13 +40,6 @@ export function RatingButtons({ value, onChange, disabled }: RatingButtonsProps)
                 />
               )}
             </motion.button>
-
-            {/* Label */}
-            <span className={`text-[10px] sm:text-xs font-heading font-semibold text-center leading-tight transition-colors duration-300 ${
-              value === rating ? 'text-purple-300' : 'text-white/40'
-            }`}>
-              {LABELS[rating]}
-            </span>
           </div>
         ))}
       </div>

@@ -7,17 +7,77 @@ import { ModuleHeader } from '@/components/ModuleHeader';
 import { ResultsDashboard } from '@/components/ResultsDashboard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { CORE_QUESTIONS, MODULES, type AssessmentResult, type Response } from '@shared/schema';
+import { InstructionsPage } from '@/components/InstructionsPage';
 
-import { apiRequest } from '@/lib/queryClient';
+type Stage = 'hero' | 'onboarding' | 'instructions' | 'core' | 'module-intro' | 'module' | 'results' | 'duplicate';
 
-type Stage = 'hero' | 'onboarding' | 'core' | 'module-intro' | 'module' | 'results' | 'duplicate';
+// Comprehensive whitelist of real email providers
+const VALID_DOMAINS = new Set([
+  // Google
+  'gmail.com', 'googlemail.com',
+  // Yahoo
+  'yahoo.com', 'yahoo.in', 'yahoo.co.in', 'yahoo.co.uk', 'yahoo.com.au',
+  'ymail.com', 'rocketmail.com',
+  // Microsoft
+  'outlook.com', 'hotmail.com', 'hotmail.in', 'hotmail.co.uk',
+  'live.com', 'live.in', 'msn.com', 'windowslive.com',
+  // Apple
+  'icloud.com', 'me.com', 'mac.com',
+  // Privacy / Pro
+  'protonmail.com', 'proton.me', 'tutanota.com', 'tutamail.com',
+  'zoho.com', 'zohomail.com',
+  // India specific
+  'rediffmail.com', 'sify.com',
+  // Common professional
+  'aol.com', 'aim.com', 'gmx.com', 'gmx.net', 'mail.com',
+  'fastmail.com', 'hey.com',
+]);
+
+function validateEmailDomain(email: string): boolean {
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const domain = parts[1].toLowerCase().trim();
+  if (!domain || domain.length < 3) return false;
+
+  // Reject obviously fake domains (no dot, or single character TLD)
+  const domainParts = domain.split('.');
+  if (domainParts.length < 2) return false;
+  const tld = domainParts[domainParts.length - 1];
+  if (tld.length < 2) return false;
+
+  // Accept known providers
+  if (VALID_DOMAINS.has(domain)) return true;
+
+  // Accept any educational or academic domain
+  if (domain.endsWith('.edu')) return true;
+  if (domain.endsWith('.edu.in')) return true;
+  if (domain.endsWith('.ac.in')) return true;
+  if (domain.endsWith('.ac.uk')) return true;
+  if (domain.endsWith('.ac.nz')) return true;
+  if (domain.endsWith('.ac.za')) return true;
+
+  // Reject single-word domains that are clearly fake (e.g. abc@xyz.com where xyz has no known TLD pattern)
+  // Allow .com/.net/.org/.co.in etc only if they're in our whitelist
+  // For unknown domains, reject them
+  return false;
+}
 
 export default function AssessmentPage() {
   const [stage, setStage] = useState<Stage>('hero');
   const [duplicateReason, setDuplicateReason] = useState('');
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [onboardingError, setOnboardingError] = useState('');
-  const [userInfo, setUserInfo] = useState({ name: '', email: '', age: '', studentId: '' });
+  const [userInfo, setUserInfo] = useState({
+    name: '',
+    email: '',
+    age: '',
+    studentId: '',
+    gender: '',
+    semester: '',
+    scholarType: '',
+    qualification: '',
+  });
+  const [consentChecked, setConsentChecked] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [coreResponses, setCoreResponses] = useState<Response[]>([]);
   const [moduleResponses, setModuleResponses] = useState<Response[]>([]);
@@ -25,18 +85,28 @@ export default function AssessmentPage() {
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
   const [currentModuleQuestionIndex, setCurrentModuleQuestionIndex] = useState(0);
   const [result, setResult] = useState<AssessmentResult | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState('');
+  const [assessmentId, setAssessmentId] = useState<number | null>(null);
   const [backgroundGradient, setBackgroundGradient] = useState('from-indigo-950 via-purple-950 to-slate-950');
 
-  const handleStart = () => {
-    setStage('onboarding');
-  };
+  const handleStart = () => setStage('onboarding');
 
   const handleOnboardingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userInfo.name || !userInfo.email || !userInfo.age || !userInfo.studentId) return;
+    setOnboardingError('');
+
+    // Email domain validation
+    if (!validateEmailDomain(userInfo.email)) {
+      setOnboardingError('Please enter a valid email address (e.g. @gmail.com, @yahoo.com, or your college email).');
+      return;
+    }
+
+    if (!consentChecked) {
+      setOnboardingError('Please provide your consent to proceed.');
+      return;
+    }
 
     setCheckingDuplicate(true);
-    setOnboardingError('');
 
     try {
       const res = await fetch('/api/check-duplicate', {
@@ -52,24 +122,22 @@ export default function AssessmentPage() {
         return;
       }
     } catch {
-      // If check fails, allow them through (server will catch on final submit)
+      // If check fails, allow through — server will catch on submit
     }
 
     setCheckingDuplicate(false);
-    setStage('core');
+    setStage('instructions');
   };
 
   const handleCoreResponse = (rating: number) => {
     const questionId = CORE_QUESTIONS[currentQuestionIndex].id;
     const newResponses = [...coreResponses];
     const existingIndex = newResponses.findIndex(r => r.questionId === questionId);
-    
     if (existingIndex >= 0) {
       newResponses[existingIndex] = { questionId, rating };
     } else {
       newResponses.push({ questionId, rating });
     }
-    
     setCoreResponses(newResponses);
   };
 
@@ -85,15 +153,9 @@ export default function AssessmentPage() {
       const poorSleep = coreResponses.find(r => r.questionId === 'c3')?.rating || 0;
       const financial = coreResponses.find(r => r.questionId === 'c4')?.rating || 0;
 
-      if (heavyWorkload >= 2 && pressureGrades >= 2) {
-        modules.push(MODULES.find(m => m.id === 'academic')!);
-      }
-      if (poorSleep >= 2) {
-        modules.push(MODULES.find(m => m.id === 'health')!);
-      }
-      if (financial >= 2) {
-        modules.push(MODULES.find(m => m.id === 'financial')!);
-      }
+      if (heavyWorkload >= 2 && pressureGrades >= 2) modules.push(MODULES.find(m => m.id === 'academic')!);
+      if (poorSleep >= 2) modules.push(MODULES.find(m => m.id === 'health')!);
+      if (financial >= 2) modules.push(MODULES.find(m => m.id === 'financial')!);
       modules.push(MODULES.find(m => m.id === 'social')!);
 
       setActiveModules(modules);
@@ -108,24 +170,25 @@ export default function AssessmentPage() {
     }
   };
 
+  const handleCorePrev = () => {
+    if (currentQuestionIndex > 0) setCurrentQuestionIndex(currentQuestionIndex - 1);
+  };
+
   const handleModuleResponse = (rating: number) => {
     const module = activeModules[currentModuleIndex];
     const questionId = module.questions[currentModuleQuestionIndex].id;
     const newResponses = [...moduleResponses];
     const existingIndex = newResponses.findIndex(r => r.questionId === questionId);
-    
     if (existingIndex >= 0) {
       newResponses[existingIndex] = { questionId, rating };
     } else {
       newResponses.push({ questionId, rating });
     }
-    
     setModuleResponses(newResponses);
   };
 
   const handleModuleNext = () => {
     const module = activeModules[currentModuleIndex];
-    
     if (currentModuleQuestionIndex < module.questions.length - 1) {
       setCurrentModuleQuestionIndex(currentModuleQuestionIndex + 1);
     } else {
@@ -139,9 +202,24 @@ export default function AssessmentPage() {
     }
   };
 
+  const handleModulePrev = () => {
+    if (currentModuleQuestionIndex > 0) {
+      setCurrentModuleQuestionIndex(currentModuleQuestionIndex - 1);
+    } else if (currentModuleIndex > 0) {
+      const prevModule = activeModules[currentModuleIndex - 1];
+      setCurrentModuleIndex(currentModuleIndex - 1);
+      setCurrentModuleQuestionIndex(prevModule.questions.length - 1);
+      setStage('module');
+    } else {
+      // Back to last core question
+      setCurrentQuestionIndex(CORE_QUESTIONS.length - 1);
+      setStage('core');
+    }
+  };
+
   const calculateResults = async (finalModuleResponses: Response[]) => {
     const coreScore = coreResponses.reduce((sum, r) => sum + r.rating, 0);
-    
+
     const moduleScores: Record<string, number> = {};
     activeModules.forEach(module => {
       const score = finalModuleResponses
@@ -185,6 +263,10 @@ export default function AssessmentPage() {
           name: userInfo.name,
           email: userInfo.email,
           age: parseInt(userInfo.age),
+          gender: userInfo.gender,
+          semester: userInfo.semester,
+          scholarType: userInfo.scholarType,
+          qualification: userInfo.qualification,
           coreScore,
           moduleScores,
           totalScore,
@@ -203,6 +285,8 @@ export default function AssessmentPage() {
         setStage('duplicate');
         return;
       }
+      const saved = await res.json();
+      if (saved?.id) setAssessmentId(saved.id);
     } catch (error) {
       console.error('Failed to save assessment:', error);
     }
@@ -215,6 +299,7 @@ export default function AssessmentPage() {
     setStage('hero');
     setDuplicateReason('');
     setOnboardingError('');
+    setConsentChecked(false);
     setCurrentQuestionIndex(0);
     setCoreResponses([]);
     setModuleResponses([]);
@@ -222,24 +307,23 @@ export default function AssessmentPage() {
     setCurrentModuleIndex(0);
     setCurrentModuleQuestionIndex(0);
     setResult(null);
-    setUserInfo({ name: '', email: '', age: '', studentId: '' });
+    setAssessmentId(null);
+    setUserInfo({ name: '', email: '', age: '', studentId: '', gender: '', semester: '', scholarType: '', qualification: '' });
   };
 
-  const handleDownloadPDF = () => {
-    if (!result) return;
-    import('@/lib/pdfGenerator').then(({ generatePDFReport }) => {
-      generatePDFReport(result, coreResponses, moduleResponses);
-    });
-  };
+
 
   const handleExportData = () => {
     if (!result) return;
-
     const csvData = [
       ['Student ID', userInfo.studentId],
       ['Name', userInfo.name],
       ['Email', userInfo.email],
       ['Age', userInfo.age],
+      ['Gender', userInfo.gender],
+      ['Semester', userInfo.semester],
+      ['Scholar Type', userInfo.scholarType],
+      ['Qualification', userInfo.qualification],
       [],
       ['Question ID', 'Question', 'Rating'],
       ...CORE_QUESTIONS.map(q => {
@@ -273,7 +357,7 @@ export default function AssessmentPage() {
   };
 
   useEffect(() => {
-    if (stage === 'hero' || stage === 'onboarding') {
+    if (stage === 'hero' || stage === 'onboarding' || stage === 'instructions') {
       setBackgroundGradient('from-slate-950 via-indigo-950 to-slate-950');
     } else if (stage === 'core') {
       const coreGradients = [
@@ -291,7 +375,7 @@ export default function AssessmentPage() {
       setBackgroundGradient(coreGradients[currentQuestionIndex] || 'from-indigo-950 via-slate-950 to-purple-950');
     } else if (stage === 'module-intro' || stage === 'module') {
       const module = activeModules[currentModuleIndex];
-      if (module.id === 'academic') setBackgroundGradient('from-violet-950 via-indigo-950 to-blue-950');
+      if (module.id === 'academic') setBackgroundGradient('from-blue-950 via-cyan-950 to-slate-950');
       else if (module.id === 'social') setBackgroundGradient('from-rose-950 via-pink-950 to-purple-950');
       else if (module.id === 'financial') setBackgroundGradient('from-amber-950 via-orange-950 to-yellow-950');
       else if (module.id === 'health') setBackgroundGradient('from-emerald-950 via-teal-950 to-cyan-950');
@@ -316,7 +400,6 @@ export default function AssessmentPage() {
     const coreTotal = CORE_QUESTIONS.length;
     const moduleTotal = activeModules.reduce((sum, m) => sum + m.questions.length, 0);
     const total = coreTotal + moduleTotal;
-    
     let completed = coreResponses.length;
     if (stage === 'module' || stage === 'module-intro' || stage === 'results') {
       completed = coreTotal;
@@ -329,13 +412,12 @@ export default function AssessmentPage() {
         ).length;
       }
     }
-
     return { completed, total };
   };
 
   const progress = getTotalProgress();
-
   const inputClass = "w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all";
+  const selectClass = "w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all appearance-none cursor-pointer";
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -343,7 +425,6 @@ export default function AssessmentPage() {
         animate={{ opacity: 1 }}
         className={`fixed inset-0 bg-gradient-to-br ${backgroundGradient} transition-all duration-1000`}
       />
-
       <ParticleBackground />
 
       {(stage === 'core' || stage === 'module' || stage === 'module-intro') && (
@@ -365,70 +446,148 @@ export default function AssessmentPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="min-h-screen flex items-center justify-center px-4 py-24 relative z-10"
+            className="min-h-screen flex items-center justify-center px-4 py-12 relative z-10"
           >
-            <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl">
-              <h2 className="text-3xl sm:text-4xl font-heading font-bold text-white mb-2 text-center">Welcome</h2>
-              <p className="text-white/60 text-center mb-8">Tell us about yourself before we begin.</p>
-              <form onSubmit={handleOnboardingSubmit} className="space-y-5">
+            <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl rounded-3xl p-8 sm:p-10 border border-white/10 shadow-2xl">
+              <h2 className="text-3xl font-heading font-bold text-white mb-1 text-center">Welcome</h2>
+              <p className="text-white/60 text-center mb-7 text-sm">Please fill in your details before we begin.</p>
 
+              <form onSubmit={handleOnboardingSubmit} className="space-y-4">
+
+                {/* Roll Number */}
                 <div>
-                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">
-                    Roll Number
-                    <span className="ml-2 text-indigo-400 text-xs">(required for research)</span>
+                  <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">
+                    Roll Number <span className="text-indigo-400 text-xs">(required for research)</span>
                   </label>
-                  <input
-                    required
-                    type="text"
-                    value={userInfo.studentId}
+                  <input required type="text" value={userInfo.studentId}
                     onChange={e => setUserInfo({ ...userInfo, studentId: e.target.value })}
-                    className={inputClass}
-                    placeholder="e.g. 13000122037"
-                  />
+                    className={inputClass} placeholder="e.g. 13000122037" />
                 </div>
 
+                {/* Full Name */}
                 <div>
-                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Full Name</label>
-                  <input
-                    required
-                    type="text"
-                    value={userInfo.name}
+                  <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Full Name</label>
+                  <input required type="text" value={userInfo.name}
                     onChange={e => setUserInfo({ ...userInfo, name: e.target.value })}
-                    className={inputClass}
-                    placeholder="Enter your name"
-                  />
+                    className={inputClass} placeholder="Enter your full name" />
                 </div>
 
+                {/* Email */}
                 <div>
-                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Email Address</label>
-                  <input
-                    required
-                    type="email"
-                    value={userInfo.email}
+                  <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Email Address</label>
+                  <input required type="email" value={userInfo.email}
                     onChange={e => setUserInfo({ ...userInfo, email: e.target.value })}
-                    className={inputClass}
-                    placeholder="your@email.com"
-                  />
+                    className={inputClass} placeholder="your@email.com" />
                 </div>
 
+                {/* Age + Gender row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Age</label>
+                    <input required type="number" min="15" max="100" value={userInfo.age}
+                      onChange={e => setUserInfo({ ...userInfo, age: e.target.value })}
+                      className={inputClass} placeholder="e.g. 20" />
+                  </div>
+                  <div>
+                    <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Gender</label>
+                    <select required value={userInfo.gender}
+                      onChange={e => setUserInfo({ ...userInfo, gender: e.target.value })}
+                      className={selectClass}>
+                      <option value="" disabled className="bg-slate-900">Select</option>
+                      <option value="Male" className="bg-slate-900">Male</option>
+                      <option value="Female" className="bg-slate-900">Female</option>
+                      <option value="Non-binary" className="bg-slate-900">Non-binary</option>
+                      <option value="Prefer not to say" className="bg-slate-900">Prefer not to say</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Semester + Scholar Type row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Semester</label>
+                    <select required value={userInfo.semester}
+                      onChange={e => setUserInfo({ ...userInfo, semester: e.target.value })}
+                      className={selectClass}>
+                      <option value="" disabled className="bg-slate-900">Select</option>
+                      {[1,2,3,4,5,6,7,8].map(s => (
+                        <option key={s} value={`Semester ${s}`} className="bg-slate-900">Semester {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Residence</label>
+                    <select required value={userInfo.scholarType}
+                      onChange={e => setUserInfo({ ...userInfo, scholarType: e.target.value })}
+                      className={selectClass}>
+                      <option value="" disabled className="bg-slate-900">Select</option>
+                      <option value="Day Scholar" className="bg-slate-900">Day Scholar</option>
+                      <option value="Hostelier" className="bg-slate-900">Hostelier</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Qualification */}
                 <div>
-                  <label className="block text-white/70 text-sm font-heading mb-2 ml-1">Age</label>
-                  <input
-                    required
-                    type="number"
-                    min="15"
-                    max="100"
-                    value={userInfo.age}
-                    onChange={e => setUserInfo({ ...userInfo, age: e.target.value })}
-                    className={inputClass}
-                    placeholder="e.g. 20"
-                  />
+                  <label className="block text-white/70 text-sm font-heading mb-1.5 ml-1">Academic Qualification</label>
+                  <select required value={userInfo.qualification}
+                    onChange={e => setUserInfo({ ...userInfo, qualification: e.target.value })}
+                    className={selectClass}>
+                    <option value="" disabled className="bg-slate-900">Select your qualification</option>
+                    <optgroup label="Undergraduate" className="bg-slate-900">
+                      <option value="B.Tech / B.E." className="bg-slate-900">B.Tech / B.E.</option>
+                      <option value="B.Sc" className="bg-slate-900">B.Sc</option>
+                      <option value="B.Com" className="bg-slate-900">B.Com</option>
+                      <option value="B.A." className="bg-slate-900">B.A.</option>
+                      <option value="BBA" className="bg-slate-900">BBA</option>
+                      <option value="BCA" className="bg-slate-900">BCA</option>
+                      <option value="B.Pharm" className="bg-slate-900">B.Pharm</option>
+                      <option value="MBBS / BDS" className="bg-slate-900">MBBS / BDS</option>
+                      <option value="Other UG" className="bg-slate-900">Other Undergraduate</option>
+                    </optgroup>
+                    <optgroup label="Postgraduate" className="bg-slate-900">
+                      <option value="M.Tech / M.E." className="bg-slate-900">M.Tech / M.E.</option>
+                      <option value="M.Sc" className="bg-slate-900">M.Sc</option>
+                      <option value="MBA" className="bg-slate-900">MBA</option>
+                      <option value="MCA" className="bg-slate-900">MCA</option>
+                      <option value="M.A." className="bg-slate-900">M.A.</option>
+                      <option value="M.Com" className="bg-slate-900">M.Com</option>
+                      <option value="Other PG" className="bg-slate-900">Other Postgraduate</option>
+                    </optgroup>
+                    <optgroup label="Research" className="bg-slate-900">
+                      <option value="PhD / Doctorate" className="bg-slate-900">PhD / Doctorate</option>
+                    </optgroup>
+                    <optgroup label="Other" className="bg-slate-900">
+                      <option value="Diploma" className="bg-slate-900">Diploma</option>
+                      <option value="Working Professional" className="bg-slate-900">Working Professional (Not Studying)</option>
+                    </optgroup>
+                  </select>
                 </div>
 
-                <p className="text-white/30 text-xs text-center pt-1">
-                  Your data will only be used for academic research purposes.
-                </p>
+                {/* Consent Checkbox */}
+                <div
+                  onClick={() => setConsentChecked(!consentChecked)}
+                  className={`bg-white/5 border rounded-2xl p-4 mt-2 cursor-pointer transition-all duration-200 ${
+                    consentChecked ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-white/10'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
+                      consentChecked ? 'bg-indigo-500 border-indigo-500' : 'bg-transparent border-white/30'
+                    }`}>
+                      {consentChecked && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <p className="text-white/60 text-xs leading-relaxed select-none">
+                      I hereby give my informed consent to participate in this research study. I understand that the information I provide — including my name, email, roll number, and responses — will be used solely for academic research purposes by CCSSS Research Project. My data will be kept confidential and will not be shared with any third party.
+                    </p>
+                  </div>
+                </div>
 
+                {/* Error Message */}
                 {onboardingError && (
                   <motion.div
                     initial={{ opacity: 0, y: -8 }}
@@ -447,12 +606,24 @@ export default function AssessmentPage() {
                   whileTap={{ scale: checkingDuplicate ? 1 : 0.98 }}
                   type="submit"
                   disabled={checkingDuplicate}
-                  className="w-full py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-heading font-bold rounded-2xl shadow-xl hover:shadow-indigo-500/25 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-heading font-bold rounded-2xl shadow-xl hover:shadow-indigo-500/25 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {checkingDuplicate ? 'Checking...' : 'Continue to Assessment →'}
                 </motion.button>
               </form>
             </div>
+          </motion.div>
+        )}
+
+        {stage === 'instructions' && (
+          <motion.div
+            key="instructions"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <InstructionsPage onBegin={() => setStage('core')} />
           </motion.div>
         )}
 
@@ -465,6 +636,7 @@ export default function AssessmentPage() {
               value={getCurrentResponse()}
               onChange={handleCoreResponse}
               onNext={handleCoreNext}
+              onPrev={currentQuestionIndex > 0 ? handleCorePrev : undefined}
               isLastQuestion={currentQuestionIndex === CORE_QUESTIONS.length - 1}
               testId={`text-core-question-${currentQuestionIndex + 1}`}
             />
@@ -508,6 +680,7 @@ export default function AssessmentPage() {
               value={getCurrentResponse()}
               onChange={handleModuleResponse}
               onNext={handleModuleNext}
+              onPrev={handleModulePrev}
               isLastQuestion={
                 currentModuleQuestionIndex === activeModules[currentModuleIndex].questions.length - 1 &&
                 currentModuleIndex === activeModules.length - 1
@@ -518,16 +691,14 @@ export default function AssessmentPage() {
         )}
 
         {stage === 'results' && result && (
-          <motion.div
-            key="results"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-          >
+          <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}>
             <ResultsDashboard
               result={result}
+              coreResponses={coreResponses}
+              moduleResponses={moduleResponses}
+              userInfo={userInfo}
+              assessmentId={assessmentId}
               onRetake={handleRetake}
-              onDownloadPDF={handleDownloadPDF}
               onExportData={handleExportData}
             />
             <motion.footer
@@ -537,9 +708,9 @@ export default function AssessmentPage() {
               className="text-center pb-12 text-white/50 text-sm"
               data-testid="footer-credits"
             >
-              <p>Developed by Group 10</p>
-              <p className="mt-1">Workplace Stress Resilience Prediction Project</p>
-              <p className="mt-1">Techno Main Salt Lake</p>
+              <p></p>
+              <p className="mt-1">CCSSS Research Project</p>
+              <p className="mt-1"></p>
             </motion.footer>
           </motion.div>
         )}
@@ -568,7 +739,6 @@ export default function AssessmentPage() {
             </div>
           </motion.div>
         )}
-
       </AnimatePresence>
     </div>
   );

@@ -51,6 +51,25 @@ export default function AdminPage() {
     fetchSubmissions(password);
   };
 
+  const handleDownloadPDF = (id: number, studentId: string) => {
+    fetch(`/api/admin/pdf/${id}`, {
+      headers: { "x-admin-password": password },
+    })
+      .then(r => {
+        if (!r.ok) { alert("PDF not available. Student hasn't downloaded their report yet."); return null; }
+        return r.blob();
+      })
+      .then(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `CCSSS-${studentId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  };
+
   const handleExport = () => {
     window.open(
       `/api/admin/export.csv?_auth=${encodeURIComponent(password)}`,
@@ -107,7 +126,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-white font-heading">Admin Dashboard</h1>
-            <p className="text-white/50 text-sm mt-1">CCSSS — Group 10</p>
+            <p className="text-white/50 text-sm mt-1">CCSSS — </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -142,7 +161,7 @@ export default function AdminPage() {
         <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
           <div>
             <h1 className="text-3xl font-bold text-white font-heading">Admin Dashboard</h1>
-            <p className="text-white/50 mt-1">Combined College Student Stress Scale — Group 10</p>
+            <p className="text-white/50 mt-1">Combined College Student Stress Scale — </p>
           </div>
           <div className="flex gap-3">
             <motion.button
@@ -233,7 +252,7 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
-                  {["#", "Student ID", "Name", "Email", "Age", "Core", "Total", "Max", "%", "Stress Level", "Modules", "Submitted"].map(h => (
+                  {["#", "Student ID", "Name", "Email", "Age", "Gender", "Qualification", "Semester", "Residence", "Core", "Total", "Max", "%", "Stress Level", "PDF", "Submitted"].map(h => (
                     <th key={h} className="text-left text-white/40 font-heading font-medium text-xs uppercase tracking-wider px-4 py-4 whitespace-nowrap">
                       {h}
                     </th>
@@ -267,6 +286,10 @@ export default function AdminPage() {
                           <td className="px-4 py-3.5 text-white font-medium whitespace-nowrap">{s.name}</td>
                           <td className="px-4 py-3.5 text-white/60">{s.email}</td>
                           <td className="px-4 py-3.5 text-white/60">{s.age}</td>
+                          <td className="px-4 py-3.5 text-white/60">{(s as any).gender ?? "—"}</td>
+                          <td className="px-4 py-3.5 text-white/60">{(s as any).qualification ?? "—"}</td>
+                          <td className="px-4 py-3.5 text-white/60">{(s as any).semester ?? "—"}</td>
+                          <td className="px-4 py-3.5 text-white/60">{(s as any).scholarType ?? "—"}</td>
                           <td className="px-4 py-3.5 text-white/80 font-mono">{s.coreScore}</td>
                           <td className="px-4 py-3.5 text-white font-mono font-semibold">{s.totalScore}</td>
                           <td className="px-4 py-3.5 text-white/40 font-mono">{s.maxScore}</td>
@@ -276,8 +299,17 @@ export default function AdminPage() {
                               {s.stressLevel}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 text-white/40 text-xs max-w-[180px] truncate" title={moduleList}>
-                            {moduleList || "—"}
+                          <td className="px-4 py-3.5">
+                            {(s as any).pdfData ? (
+                              <button
+                                onClick={() => handleDownloadPDF(s.id, s.studentId)}
+                                className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-heading hover:bg-emerald-500/30 transition-all"
+                              >
+                                ↓ PDF
+                              </button>
+                            ) : (
+                              <span className="text-white/20 text-xs">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3.5 text-white/40 whitespace-nowrap text-xs">
                             {s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
@@ -293,7 +325,7 @@ export default function AdminPage() {
         </motion.div>
 
         <p className="text-center text-white/20 text-xs mt-6">
-          Showing {filtered.length} of {submissions.length} submissions · CCSSS Admin Panel · Group 10, Techno Main Salt Lake
+          Showing {filtered.length} of {submissions.length} submissions · CCSSS Admin Panel · CCSSS Research Project
         </p>
       </div>
     </div>
