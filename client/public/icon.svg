@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Base circle -->
+  <circle cx="50" cy="50" r="50" fill="#312e81"/>
+  <!-- Outer ring accent -->
+  <circle cx="50" cy="50" r="48" fill="none" stroke="#6366f1" stroke-width="2" opacity="0.6"/>
+  <!-- Inner subtle ring -->
+  <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>
+  <!-- Top arc — lit portion -->
+  <path d="M24,28 A30,30 0 0,1 76,28" fill="none" stroke="#818cf8" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+  <!-- Bar 1 — short -->
+  <rect x="28" y="56" width="10" height="20" rx="3" fill="rgba(255,255,255,0.42)"/>
+  <!-- Bar 2 — medium -->
+  <rect x="42" y="44" width="10" height="32" rx="3" fill="rgba(255,255,255,0.68)"/>
+  <!-- Bar 3 — tall -->
+  <rect x="56" y="32" width="10" height="44" rx="3" fill="white"/>
+  <!-- Trend line -->
+  <polyline points="33,38 47,28 62,35" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Trend dot -->
+  <circle cx="62" cy="35" r="4.5" fill="#34d399"/>
+</svg>
