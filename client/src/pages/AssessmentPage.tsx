@@ -510,7 +510,7 @@ export default function AssessmentPage() {
                       onChange={e => setUserInfo({ ...userInfo, semester: e.target.value })}
                       className={selectClass}>
                       <option value="" disabled className="bg-slate-900">Select</option>
-                      {[1,2,3,4,5,6,7,8].map(s => (
+                      {[1,2,3,4,5,6,7,8,9,10].map(s => (
                         <option key={s} value={`Semester ${s}`} className="bg-slate-900">Semester {s}</option>
                       ))}
                     </select>
@@ -521,8 +521,10 @@ export default function AssessmentPage() {
                       onChange={e => setUserInfo({ ...userInfo, scholarType: e.target.value })}
                       className={selectClass}>
                       <option value="" disabled className="bg-slate-900">Select</option>
-                      <option value="Day Scholar" className="bg-slate-900">Day Scholar</option>
-                      <option value="Hostelier" className="bg-slate-900">Hostelier</option>
+                      <option value="Commute from Home" className="bg-slate-900">Commute from Home</option>
+                      <option value="Commute from Hostel/mess" className="bg-slate-900">Commute from Hostel/mess</option>
+                      <option value="Commute from PG" className="bg-slate-900">Commute from PG</option>
+                      <option value="Commute from Rented House" className="bg-slate-900">Commute from Rented House</option>
                     </select>
                   </div>
                 </div>
@@ -559,7 +561,6 @@ export default function AssessmentPage() {
                     </optgroup>
                     <optgroup label="Other" className="bg-slate-900">
                       <option value="Diploma" className="bg-slate-900">Diploma</option>
-                      <option value="Working Professional" className="bg-slate-900">Working Professional (Not Studying)</option>
                     </optgroup>
                   </select>
                 </div>
