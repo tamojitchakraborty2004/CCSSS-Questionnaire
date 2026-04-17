@@ -19,10 +19,38 @@ export class DatabaseStorage implements IStorage {
     return assessment;
   }
 
-  async getAllAssessments(): Promise<Assessment[]> {
-    const result = await db.select().from(assessments);
+  async getAllAssessments(): Promise<any[]> {
+    const result = await db
+      .select({
+        id: assessments.id,
+        studentId: assessments.studentId,
+        name: assessments.name,
+        email: assessments.email,
+        age: assessments.age,
+        gender: assessments.gender,
+        semester: assessments.semester,
+        scholarType: assessments.scholarType,
+
+        coreResponses: assessments.coreResponses,
+        moduleResponses: assessments.moduleResponses,
+        moduleScores: assessments.moduleScores,
+
+        coreScore: assessments.coreScore,
+        totalScore: assessments.totalScore,
+        maxScore: assessments.maxScore,
+        percentage: assessments.percentage,
+        stressLevel: assessments.stressLevel,
+        dominantCategories: assessments.dominantCategories,
+
+        interpretation: assessments.interpretation, 
+
+        createdAt: assessments.createdAt,
+      })
+      .from(assessments);
+
     return result.sort((a, b) => b.id - a.id);
   }
+
 
   async findByEmailOrStudentId(email: string, studentId: string): Promise<Assessment | null> {
     const { or, eq } = await import("drizzle-orm");
