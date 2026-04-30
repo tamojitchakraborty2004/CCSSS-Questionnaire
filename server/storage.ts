@@ -19,7 +19,7 @@ export class DatabaseStorage implements IStorage {
     return assessment;
   }
 
-  async getAllAssessments(): Promise<any[]> {
+  async getAllAssessments(limit = 20): Promise<any[]> {
     const result = await db
       .select({
         id: assessments.id,
@@ -28,6 +28,7 @@ export class DatabaseStorage implements IStorage {
         email: assessments.email,
         age: assessments.age,
         gender: assessments.gender,
+        qualification: assessments.qualification,
         semester: assessments.semester,
         scholarType: assessments.scholarType,
 
