@@ -51,23 +51,41 @@ export default function AdminPage() {
     fetchSubmissions(password);
   };
 
-  const handleDownloadPDF = (id: number, studentId: string) => {
-    fetch(`/api/admin/pdf/${id}`, {
-      headers: { "x-admin-password": password },
-    })
-      .then(r => {
-        if (!r.ok) { alert("PDF not available. Student hasn't downloaded their report yet."); return null; }
-        return r.blob();
-      })
-      .then(blob => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `CCSSS-${studentId}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+  const handleDownloadPDF = async (s: any) => {
+    // Regenerate PDF fresh from stored data — no DB blob needed
+    try {
+      const { generatePDFReport } = await import('@/lib/pdfGenerator');
+      const userInfo = {
+        name: s.name,
+        email: s.email,
+        age: String(s.age),
+        studentId: s.studentId,
+        gender: s.gender ?? '',
+        semester: s.semester ?? '',
+        scholarType: s.scholarType ?? '',
+        qualification: s.qualification ?? '',
+      };
+      const result = {
+        coreScore: s.coreScore,
+        moduleScores: s.moduleScores ?? {},
+        totalScore: s.totalScore,
+        maxScore: s.maxScore,
+        percentage: s.percentage,
+        stressLevel: s.stressLevel,
+        dominantCategories: s.dominantCategories ?? [],
+        completedAt: s.createdAt ?? new Date().toISOString(),
+      };
+      await generatePDFReport(
+        result,
+        s.coreResponses ?? [],
+        s.moduleResponses ?? [],
+        userInfo,
+        s.interpretation ?? ''
+      );
+    } catch (e) {
+      alert('Failed to generate PDF. Please try again.');
+      console.error(e);
+    }
   };
 
   const handleExport = () => {
@@ -300,16 +318,12 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            {(s as any).pdfData ? (
                               <button
-                                onClick={() => handleDownloadPDF(s.id, s.studentId)}
+                                onClick={() => handleDownloadPDF(s)}
                                 className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-heading hover:bg-emerald-500/30 transition-all"
                               >
                                 ↓ PDF
                               </button>
-                            ) : (
-                              <span className="text-white/20 text-xs">—</span>
-                            )}
                           </td>
                           <td className="px-4 py-3.5 text-white/40 whitespace-nowrap text-xs">
                             {s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}

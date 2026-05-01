@@ -85,14 +85,7 @@ export function ResultsDashboard({ result, coreResponses, moduleResponses, userI
       const { generatePDFReport } = await import('@/lib/pdfGenerator');
       const base64 = await generatePDFReport(result, coreResponses, moduleResponses, userInfo, interpText);
       setPdfBase64(base64);
-      // Save to DB silently
-      if (assessmentId && base64) {
-        fetch(`/api/assessments/${assessmentId}/pdf`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pdfData: base64, interpretation: interpText }),
-        }).catch(e => console.error('Failed to save PDF to DB:', e));
-      }
+      // PDF is not stored in DB — generated fresh each time to save bandwidth
     } catch (e) {
       console.error('PDF auto-generation failed:', e);
     }

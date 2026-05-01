@@ -234,40 +234,6 @@ Keep the tone warm, professional, and supportive. Do not use bullet points - wri
   });
 
 
-  // ── Save PDF to DB ────────────────────────────────────────────────────────
-  app.post("/api/assessments/:id/pdf", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { pdfData, interpretation } = req.body;
-      if (!pdfData) return res.status(400).json({ error: "No PDF data provided" });
-      await storage.updatePdfData(id, pdfData, interpretation || '');
-      res.json({ ok: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // ── Admin: download PDF for a specific submission ─────────────────────────
-  app.get("/api/admin/pdf/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const assessment = await storage.getAssessmentById(id);
-      if (!assessment) return res.status(404).json({ error: "Assessment not found" });
-      if (!assessment.pdfData) return res.status(404).json({ error: "PDF not yet generated for this submission" });
-
-      // Strip the data URI prefix and decode base64 to binary buffer
-      const raw = assessment.pdfData as string;
-      const base64 = raw.includes(',') ? raw.split(',')[1] : raw;
-      const buffer = Buffer.from(base64, 'base64');
-      const date = assessment.createdAt ? new Date(assessment.createdAt).toISOString().split('T')[0] : 'report';
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="CCSSS-${assessment.studentId}-${date}.pdf"`);
-      res.setHeader('Content-Length', buffer.length);
-      res.end(buffer);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;
